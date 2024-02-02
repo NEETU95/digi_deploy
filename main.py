@@ -389,9 +389,9 @@ def pdf_extraction(pdf_info):
                 shutil.rmtree('random_temp', ignore_errors=True)
                 os.chdir('..')
                 print("###### Create Case AI API calling started ########")
-                #url = "https://demo1.topiatech.co.uk/PV/createCaseAI"
+                url = "https://demo1.topiatech.co.uk/PV/createCaseAI"
 
-                url = "http://192.168.4.174:8090/SafetyDB/createCaseAI"
+
 
 
                 response = requests.post(url, json=response_for_integration)
@@ -428,8 +428,8 @@ def pdf_extraction(pdf_info):
                 }
                 #print(response)
                 print("###### Create Case AI API calling started from success=false########")
-                #url = "https://demo1.topiatech.co.uk/PV/createCaseAI"
-                url = "http://192.168.4.174:8090/SafetyDB/createCaseAI"
+                url = "https://demo1.topiatech.co.uk/PV/createCaseAI"
+
 
                 #print("=--------------------------------------------------------------------------------------------------------")
 
@@ -464,9 +464,9 @@ def pdf_extraction(pdf_info):
 
             #print(response)
 
-            #url = "https://demo1.topiatech.co.uk/PV/createCaseAI"
+            url = "https://demo1.topiatech.co.uk/PV/createCaseAI"
 
-            url = "http://192.168.4.174:8090/SafetyDB/createCaseAI"
+            #url = "http://192.168.4.174:8090/SafetyDB/createCaseAI"
 
 
             #print("=--------------------------------------------------------------------------------------------------------")
