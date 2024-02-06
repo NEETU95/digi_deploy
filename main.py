@@ -15,6 +15,7 @@ from receipt_file import get_receipt
 import fitz
 import json
 import stanza
+from stanza.pipeline.core import DownloadMethod
 
 
 from metapub import PubMedFetcher
@@ -26,14 +27,17 @@ from metapub import PubMedFetcher
 
 def pdf_extraction(pdf_info):
     print("*******NLP API CALLING STARTED*********")
-    #data_event = json.loads(event['body'])
-    #pdf_info = str(data_event['pdf_info'])
+    # data_event = json.loads(event['body'])
+    # pdf_info = str(data_event['pdf_info'])
     # shutil.copy2('*', '/tmp')
 
     destination_directory = 'random_temp'
     os.chdir('tmp')
-    if not os.path.exists(destination_directory):
-        os.makedirs(destination_directory)
+    if os.path.exists(destination_directory):
+        shutil.rmtree('random_temp', ignore_errors=True)
+    os.makedirs(destination_directory)
+    print('dir created')
+
     # os.makedirs('random_temp', exist_ok=True)  ### changing directory
     os.chdir('random_temp')
     try:
@@ -42,6 +46,14 @@ def pdf_extraction(pdf_info):
         pass
     try:
         shutil.copy2('../../medical_event_terms.xlsx', '.')
+    except shutil.SameFileError:
+        pass
+    try:
+        shutil.copy2('../../LLT_Details_26_1.csv', '.')
+    except shutil.SameFileError:
+        pass
+    try:
+        shutil.copy2('../../iso_country_codes.xlsx', '.')
     except shutil.SameFileError:
         pass
     try:
@@ -66,13 +78,13 @@ def pdf_extraction(pdf_info):
         try:
             cnopts = pysftp.CnOpts()
             cnopts.hostkeys = None
-            #ftp = pysftp.Connection('testnovumgen.topiatech.co.uk', username='pvtestuser', password='Umlup01cli$$6969',cnopts=cnopts)
+            # ftp = pysftp.Connection('testnovumgen.topiatech.co.uk', username='pvtestuser', password='Umlup01cli$$6969',cnopts=cnopts)
             ftp = pysftp.Connection('demo1.topiatech.co.uk', username='pvtestuser', password='Umlup01cli$$6969',
                                     cnopts=cnopts)
             print("****STARTED SFTP ******")
             with ftp.cd('/upload/pvtestusers/'):
                 files = ftp.listdir()
-                print('files : ', files)
+                # print('files : ', files)
                 print('pdf_info from code', pdf_info)
                 matched_files = list(filter(lambda file: pdf_info in file, files))
                 if matched_files:
@@ -97,7 +109,7 @@ def pdf_extraction(pdf_info):
 
 
         except Exception as e:
-            #print(f"Exception occurred: {str(e)}")
+            # print(f"Exception occurred: {str(e)}")
             success = False
             message = str(e)
             weekly_reader_1 = ""
@@ -110,16 +122,15 @@ def pdf_extraction(pdf_info):
         weekly_reader_num_pages = len(weekly_reader.pages)
         print("222222222222222")
 
-
         source_file_num_pages = len(source_file_reader.pages)
         weekly_text_1 = ""
         all_text = ""
         nlp = spacy.load("en_core_web_sm")
         try:
-            stanza.download('en', package='mimic', processors={'ner': 'i2b2'})
-            nlp_1 = stanza.Pipeline('en', package='mimic', processors={'ner': 'i2b2'})
+            #stanza.download('en', package='mimic', processors={'ner': 'i2b2'})
+            nlp_1=stanza.Pipeline('en', package='mimic', processors={'ner': 'i2b2'})
             print("loaded model")
-            #nlp_1 = spacy.load("en_ner_bc5cdr_md")
+            # nlp_1 = spacy.load("en_ner_bc5cdr_md")
         except Exception:
             success = False
             message = "Not loaded bcd5r model"
@@ -137,12 +148,16 @@ def pdf_extraction(pdf_info):
         #         references_found = True
         #         break
         #     all_text += text
+        print("opening_fitz----")
+        print('source_document : ', source_document)
         doc = fitz.open(source_document)  # open a document
+
         for page_num in range(doc.page_count):
             page = doc[page_num]
             text = page.get_text()
             all_text += text
             print(f"Page {page_num + 1}:\n{text}\n")
+
         for page_num in range(weekly_reader_num_pages):
             page = weekly_reader.pages[page_num]
             text = page.extract_text()
@@ -150,7 +165,7 @@ def pdf_extraction(pdf_info):
         weekly_text = re.sub(r'\s*-\s*', '-', weekly_text_1)
         meta = source_file_reader.metadata
         title_of_page = ""
-        #print("title_of_page", meta.title)
+        # print("title_of_page", meta.title)
         doi = ""
         doi_found = False
         doi_raw = ""
@@ -261,18 +276,17 @@ def pdf_extraction(pdf_info):
                         pages = page
 
         except Exception as e:
-            #print(f"Exception occurred: {str(e)}")
+            print(f"Exception occurred: {str(e)}")
             success = False
             message = "Title is not found"
-            #print("success", success)
-            #print("message", message)
+            # print("success", success)
+            # print("message", message)
             raise Exception(f"Exception occurred: {str(e)}")
-
 
         country_verify = ""
         latest_receipt_date = ""
         try:
-            #print("checking in 2nd blcok")
+            # print("checking in 2nd blcok")
             latest_receipt_date = get_receipt(en_core=nlp, weekly_text_1=weekly_text)
             if not latest_receipt_date:
                 success = False
@@ -280,29 +294,26 @@ def pdf_extraction(pdf_info):
                 raise Exception("latest receipt date is not found")
 
         except Exception as e:
-            #print(f"Exception occurred: {str(e)}")
+            # print(f"Exception occurred: {str(e)}")
             success = False
             message = "Latest Receipt date is not found"
             raise Exception("Latest Receipt date is not found")
 
-
-
-
         try:
-            #print("checking in 3rd block")
+            # print("checking in 3rd block")
             country_verify = get_country(title=title_of_page, weekly_text_1=weekly_text, en_core=nlp)
-            #print("country is", country_verify)
+            # print("country is", country_verify)
             if not country_verify:
                 success = False
                 message = "country is not found"
                 raise Exception("country not found")
 
         except Exception as e:
-            #print(f"Exception occurred: {str(e)}")
+            # print(f"Exception occurred: {str(e)}")
             success = False
             message = "country is not found"
-            #print("success", success)
-            #print("message", message)
+            # print("success", success)
+            # print("message", message)
             raise Exception("country is not found")
 
         general_extraction = {}
@@ -319,31 +330,31 @@ def pdf_extraction(pdf_info):
                     first_page=first_page_text
                 )
         except Exception as e:
-            #print(f"Exception occurred: {str(e)}")
+            # print(f"Exception occurred: {str(e)}")
             success = False
             message = f"Exception occurred from general_reporter: {str(e)}"
-            #print("success", success)
-            #print("message", message)
+            # print("success", success)
+            # print("message", message)
             raise Exception(f"Exception occurred from general_reporter: {str(e)}")
 
         try:
             patient_extraction = get_patient_text(source_text=all_text, en_core=nlp, bcd5r=nlp_1)
         except Exception as e:
-            #print(f"Exception occurred from patient_tab: {str(e)}")
+            # print(f"Exception occurred from patient_tab: {str(e)}")
             success = False
             message = f"Exception occurred from patient_tab: {str(e)}"
-            #print("success", success)
-            #print("message", message)
+            # print("success", success)
+            # print("message", message)
             raise Exception(f"Exception occurred from patient_tab: {str(e)}")
 
         try:
             parent_extraction = get_parent_text(source_text=all_text, en_core=nlp, bcd5r=nlp_1)
         except Exception as e:
-            #print(f"Exception occurred from parent_tab: {str(e)}")
+            # print(f"Exception occurred from parent_tab: {str(e)}")
             success = False
             message = f"Exception occurred from parent_tab: {str(e)}"
-            #print("success",success)
-            #print("message", message)
+            # print("success",success)
+            # print("message", message)
             raise Exception(f"Exception occurred from parent_tab: {str(e)}")
         try:
             events_extraction = get_events_tab(source_text=all_text, country=country_verify, bcd5r=nlp_1)
@@ -369,7 +380,7 @@ def pdf_extraction(pdf_info):
             if success == True:
                 exception_values = False
                 print("entered into success")
-                message = "Extracted succesfully from NLP model."
+                message = "Extracted successfully from NLP model."
                 response_for_integration = {
                     "success": True,
                     "message": "Extracted successfully",
@@ -390,9 +401,7 @@ def pdf_extraction(pdf_info):
                 os.chdir('..')
                 print("###### Create Case AI API calling started ########")
                 url = "https://demo1.topiatech.co.uk/PV/createCaseAI"
-
-
-
+                #url_1 = " http://192.168.4.174:8090/SafetyDB/createCaseAI"
 
                 response = requests.post(url, json=response_for_integration)
 
@@ -412,8 +421,7 @@ def pdf_extraction(pdf_info):
                         "second_file_name": source_document
                     }
 
-
-                #print("response after hitting create case ai url", response)
+                # print("response after hitting create case ai url", response)
 
                 return response_from_my_api
             elif success == False:
@@ -426,12 +434,12 @@ def pdf_extraction(pdf_info):
                     "first_file_name": weekly_reader_1,
                     "second_file_name": source_document
                 }
-                #print(response)
+                # print(response)
                 print("###### Create Case AI API calling started from success=false########")
                 url = "https://demo1.topiatech.co.uk/PV/createCaseAI"
+                #url_1 ="http://192.168.4.174:8090/SafetyDB/createCaseAI"
 
-
-                #print("=--------------------------------------------------------------------------------------------------------")
+                # print("=--------------------------------------------------------------------------------------------------------")
 
                 response_from_api = requests.post(url, json=response)
                 # print("*" * 50)
@@ -447,11 +455,11 @@ def pdf_extraction(pdf_info):
             message = str(e)
             raise Exception(f"Exception occurred after extraction of details: {str(e)}")
 
-
         print("****** NLP API END ******")
 
 
     except Exception as e:
+        print("error : ", e)
         response = {
             "success": False,
             "message": message,
@@ -460,20 +468,20 @@ def pdf_extraction(pdf_info):
         }
 
         if exception_values == True:
-            print("Exception block executed with exception_values True")
+            print("Exception block executed with exception_values True", e)
 
-            #print(response)
+            # print(response)
 
             url = "https://demo1.topiatech.co.uk/PV/createCaseAI"
+            #url_1 = " http://192.168.4.174:8090/SafetyDB/createCaseAI"
 
-            #url = "http://192.168.4.174:8090/SafetyDB/createCaseAI"
 
 
-            #print("=--------------------------------------------------------------------------------------------------------")
+            # print("=--------------------------------------------------------------------------------------------------------")
             print("###### Create Case AI API calling started in exception block ########")
             response_from_api = requests.post(url, json=response)
-            #print("*" * 50)
-            #print("RESPONSE FROM CREATE CASE",response_from_api.text)
+            # print("*" * 50)
+            # print("RESPONSE FROM CREATE CASE",response_from_api.text)
             # json_response_from_api = response_from_api.json()
             if response_from_api:
                 print("###### Create Case AI API calling Ended from exception block ########", response_from_api)
@@ -487,4 +495,5 @@ def pdf_extraction(pdf_info):
         else:
             print("Exception values False executed")
             return response
+
 

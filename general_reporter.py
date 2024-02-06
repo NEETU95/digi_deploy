@@ -712,7 +712,7 @@ def get_general_reporter(source_text, en_core, weekly_text_1, meta_data, first_p
             elif qualification == qualifications[1]:
                 occupation = occupation[1]
             else:
-                occupation = ""
+                occupation = "Unk"
 
             # Reporter type
             reporter_type = ['Physician', 'Pharmacist', 'Other Health Professional']
@@ -1016,7 +1016,7 @@ def get_general_reporter(source_text, en_core, weekly_text_1, meta_data, first_p
             elif qualification == qualifications[1]:
                 occupation = occupation[1]
             else:
-                occupation = ""
+                occupation = "Unk"
 
             # Reporter type
             reporter_type_keywords = ['Physician', 'Pharmacist', 'Other Health Professional']
@@ -1399,7 +1399,7 @@ def get_general_reporter(source_text, en_core, weekly_text_1, meta_data, first_p
             elif qualification == qualifications[1]:
                 occupation = occupation[1]
             else:
-                occupation = ""
+                occupation = "Unk"
 
             # Reporter type
             reporter_type_keywords = ['Physician', 'Pharmacist', 'Other Health Professional']

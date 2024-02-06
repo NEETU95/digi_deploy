@@ -2,7 +2,6 @@ import re
 import pandas as pd
 import pycountry
 import json
-from fastapi import HTTPException
 from metapub import PubMedFetcher, config
 
 def get_country(title, weekly_text_1, en_core):
@@ -15,7 +14,8 @@ def get_country(title, weekly_text_1, en_core):
 
     author_name = ""
     found_countries = ""
-    found_cities =[]
+    found_cities = []
+    text_up_to_doi=""
 
     # getting title from literature
 
@@ -132,5 +132,28 @@ def get_country(title, weekly_text_1, en_core):
                 if is_part_of_city != found_countries:
                     found_cities.append(city)
                 print("found_countries", found_countries)
+
+            df = pd.read_excel("iso_country_codes.xlsx")
+
+            # Continue with the rest of your code
+            if not found_countries:
+                print("yes")
+                iso_codes = pd.read_excel("iso_country_codes.xlsx")
+
+                if "Affiliation" in text_up_to_doi:
+                    affiliation_text = text_up_to_doi.split('Affiliation')[1]
+                else:
+                    affiliation_text = text_up_to_doi.split('Affiliations')[0]
+
+                department_start_index = affiliation_text.find("ï‚· 1")
+                department_end_index = affiliation_text.find(". ï‚· 2")
+                department_text = affiliation_text[department_start_index + len('ï‚· 1'):department_end_index]
+                print(department_text)
+                for index, row in df.iterrows():
+                    for word in department_text.split(","):
+                        if str(row['Alpha-3 code']).strip().lower() == word.strip().lower():
+                            found_countries = word
+                        if str(row['Alpha-2 code']).strip().lower() == word.strip().lower():
+                            found_countries = word
 
     return found_countries

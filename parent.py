@@ -514,16 +514,114 @@ def get_parent_text(source_text, en_core, bcd5r):
         # nlp = stanza.Pipeline('en', package='CRAFT', processors={'ner': 'bc5cdr'}, download_method=None,use_gpu=False)
         # model_folder_path = "C:\Users\chebramu\PycharmProjects\pythonProject1\en_ner_bc5cdr_md-0.5.3"
 
-        doc = nlp(comments)
+        negative_line_keywords = ["absent", "no", "not", "normal", "without", "not significant", "excluded"]
+
+        articles = ['a', 'an', 'the', 'these', 'those', 'were']
+
+        df = pd.read_csv("LLT_Details_26_1.csv")
+
+        new_lines_for_comments = ""
+        for line in comments.split('.'):
+            contains_negative_keyword = any(negative in line.lower() for negative in negative_line_keywords)
+
+            if not contains_negative_keyword:
+                # Check for articles and exclude lines that contain them
+                doc = nlp(line)
+
+                # Filter out common words
+                filtered_tokens = [token.text for token in doc if token.text.lower() not in articles]
+
+                # Join the filtered tokens to form a new line
+                new_line = ' '.join(filtered_tokens)
+
+                new_lines_for_comments += new_line + '\n'
+
+        print("new_line++++", new_lines_for_comments)
+        doc = nlp_1(new_lines_for_comments)
+
         for ent in doc.ents:
             if ent.type == "PROBLEM":
                 mother_llt.append(ent.text)
-        if "COVID" in cleaned_comments and "19" in cleaned_comments:
-            print("YES")
-            mother_llt.append("COVID-19")
-        mother_llt_string = ','.join(mother_llt)
-        print("LLT", mother_llt_string)
+            if "COVID" in cleaned_comments and "19" in cleaned_comments:
+                print("YES")
+                mother_llt.append("COVID-19")
+        mother_llt_set = list(set(mother_llt))
+
+        new_mother_llt_indicators = []
+
+        for llt in mother_llt_set:
+            result = df.loc[df['LLT_NAME'].str.lower().str.contains(llt.lower()), 'LLT_NAME'].values
+            # result = df.loc[
+            #     df['LLT_NAME'].str.lower().str.extract(f'({llt.lower()})', expand=False).notnull(), 'LLT_NAME'].values
+            if len(result) > 0:
+                new_mother_llt_indicators.append(llt)
+        mother_llt_string = ','.join(new_mother_llt_indicators)
+
+        # bc5cdr_model_path = "stanza_resources\en\ner\bc5cdr.pt"
+        # nlp = stanza.Pipeline('en', processors={'ner': bc5cdr_model_path})
+
+        # nlp = stanza.Pipeline('en', package='CRAFT', processors={'ner': 'bc5cdr'}, download_method=None,use_gpu=False)
+        # model_folder_path = "C:\Users\chebramu\PycharmProjects\pythonProject1\en_ner_bc5cdr_md-0.5.3"
+        # nlp = spacy.load("en_ner_bc5cdr_md")
+
+        splitted_mother_llt = mother_llt_string.split(',')
+        mother_llt_output = splitted_mother_llt[0]
         print("Comments", cleaned_comments)
+        period_before_llt_index = -1
+        period_after_llt_index = -1
+        history_comments = ""
+        for llt in mother_llt:
+            llt_start_index = cleaned_comments.find(llt)
+
+            if llt_start_index != -1:
+                print("1 yes", period_after_llt_index)
+                # Find the period before llt
+                period_before_llt_index = cleaned_comments.rfind(".", 0, llt_start_index)
+
+            if period_before_llt_index != -1:
+                print("2 yes", period_before_llt_index)
+                # Find the first period after llt
+                period_after_llt_index = cleaned_comments.find('.', llt_start_index)
+
+                # Check if '.' was found
+                if period_after_llt_index != -1:
+                    print("3 yes", period_after_llt_index)
+                    # Extract the substring between period_before_llt_index and period_after_llt_index
+                    history_comments = cleaned_comments[period_before_llt_index:period_after_llt_index]
+
+            # start and end date
+            pattern = re.compile(
+                r'\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}\b'
+            )
+            match = re.search(pattern, cleaned_comments)
+            if match:
+                matched_date = match.group()
+                start_date = matched_date
+            match_end = re.search(pattern, cleaned_comments)
+            if match_end:
+                matched_end_date = match_end.group()
+                if matched_end_date != start_date:
+                    end_date = matched_end_date
+            # continuing
+            continuing_list = ['true', 'false', 'null']
+            if end_date:
+                continuing = continuing_list[1]
+            elif "continu" in cleaned_comments.lower():
+                continuing = continuing_list[0]
+            else:
+                continuing = continuing_list[2]
+
+            parent_medical_history = {
+                "parent_history": cleaned_comments,
+                "disease_surgical_procedure": "",
+                "meddra_version": "",
+                "start_date": start_date,
+                "end_date": end_date,
+                "continuing": continuing,
+                "llt": llt,
+                "comments": history_comments
+            }
+            all_parent_history.append(parent_medical_history)
 
         # DRUG HISTORY
         text_line = ""
@@ -557,50 +655,191 @@ def get_parent_text(source_text, en_core, bcd5r):
 
         print("\nText After Medicine:")
         print(text_after_medicine)
+        past_drug_indication_text= ""
+        past_drug_reaction_text = ""
+        # iterating through drug names
 
-        # Name of drug
-        # nlp = spacy.blank("en")
+        # drug name
         doc = nlp(text_before_medicine)
-        drug_name = []
+        drug_name_set = set()
         for ent in doc.ents:
-            if ent.type == "TREATMENT":
-                drug_name.append(ent.text)
-        drug_name_string = ','.join(drug_name)
-        print("LLT", drug_name_string)
+            if ent.label_ == "CHEMICAL":
+                drug_name_set.add(ent.text)
+        if "COVID" in cleaned_comments and "19" in cleaned_comments:
+            print("YES")
+            drug_name_set.add("COVID-19")
+        drug_name_list = list(drug_name_set)
+        drug_name_string = ','.join(drug_name_list)
+        for i, past_drug in enumerate(drug_name_list):
+            drug_start_index = text_before_medicine.find(past_drug)
+            next_drug_index = i + 1
+            period_before_past_drug_index = ""
 
-        # Indication
-        indication_keywords = ["noticed", "observed", "experienced", "suffered", "reported", "developed", "showed",
-                               "encountered"]
+            # Check if llt is found
+            if drug_start_index != -1:
+                past_drug_indication_text = text_before_medicine[:drug_start_index]
+                print("********amul past drug is***********", past_drug_indication_text)
+                # Find the period before llt
+                period_after_past_drug_index = text_before_medicine.find('.', drug_start_index)
 
-        text_for_indication = ""
-        lines = text_before_medicine.split("\n")
-        for i, line in enumerate(lines):
-            for indication_keyword in indication_keywords:
-                if indication_keyword in line:
-                    start_line = line.find(indication_keyword)
-                    text_for_indication = line[start_line:]
+                # Check if '.' was found
+                if period_after_past_drug_index != -1:
+                    print(f"The period after drug_start_index is at position {period_after_past_drug_index}")
+                    # Extract the substring after drug_start_index until the period
+                    past_drug_reaction_text = text_before_medicine[drug_start_index:period_after_past_drug_index]
+            indication_text = past_drug_indication_text
 
-                    # end_line = death_text.find('.')
-                    # death_comments = death_text[:end_line]
-        indication_text += text_for_indication + "\n"
 
-        doc = nlp(indication_text)
-        for ent in doc.ents:
-            if ent.type == "PROBLEM":
-                llt_indicators.append(ent.text)
-        llt_indicators_string = ','.join(llt_indicators)
-        print("Indication LLT:", llt_indicators)
-        print("Indication Comment:", indication_text)
 
-        # Reaction after drug
+            # Indication
+            indication_keywords = ["noticed", "observed", "experienced", "suffered", "reported", "developed", "showed",
+                                   "encountered"]
 
-        doc = nlp(text_after_medicine)
-        for ent in doc.ents:
-            if ent.type == "PROBLEM":
-                llt_reactions.append(ent.text)
-        llt_reactions_string = ','.join(llt_reactions)
-        print("Reaction LLT:", llt_reactions)
-        print("Reaction Comment:", text_after_medicine.split("/n")[:2])
+            text_for_indication = ""
+            lines = text_before_medicine.split("\n")
+            for i, line in enumerate(lines):
+                for indication_keyword in indication_keywords:
+                    if indication_keyword in line:
+                        start_line = line.find(indication_keyword)
+                        text_for_indication = line[start_line:]
+
+                        # end_line = death_text.find('.')
+                        # death_comments = death_text[:end_line]
+            indication_text += text_for_indication + "\n"
+
+            doc = nlp(indication_text)
+            negative_line_keywords = ["absent", "no", "not", "normal", "without", "not significant", "excluded"]
+
+            articles = ['a', 'an', 'the', 'these', 'those', 'were']
+            df = pd.read_csv("LLT_Details_26_1.csv")
+
+            new_lines_for_indication_text = ""
+
+            for line in indication_text.split('.'):
+                contains_negative_keyword = any(negative in line.lower() for negative in negative_line_keywords)
+
+                if not contains_negative_keyword:
+                    # Check for articles and exclude lines that contain them
+                    doc = nlp(line)
+
+                    # Filter out common words
+                    filtered_tokens = [token.text for token in doc if token.text.lower() not in articles]
+
+                    # Join the filtered tokens to form a new line
+                    new_line = ' '.join(filtered_tokens)
+
+                    new_lines_for_indication_text += new_line + '\n'
+
+            print("new_line++++", new_lines_for_indication_text)
+            doc = nlp_1(new_lines_for_indication_text)
+
+            for ent in doc.ents:
+                if ent.type == "PROBLEM":
+                    mother_llt.append(ent.text)
+                if "COVID" in cleaned_comments and "19" in cleaned_comments:
+                    print("YES")
+                    mother_llt.append("COVID-19")
+            mother_llt_set = list(set(mother_llt))
+
+            new_mother_llt_indicators = []
+
+            for llt in mother_llt_set:
+                result = df.loc[df['LLT_NAME'].str.lower().str.contains(llt.lower()), 'LLT_NAME'].values
+                # result = df.loc[
+                #     df['LLT_NAME'].str.lower().str.extract(f'({llt.lower()})',
+                #                                            expand=False).notnull(), 'LLT_NAME'].values
+                if len(result) > 0:
+                    new_mother_llt_indicators.append(llt)
+            mother_llt_string = ','.join(new_mother_llt_indicators)
+            llt_indicators_string = ','.join(llt_indicators)
+            print("Indication LLT:", llt_indicators)
+            print("Indication Comment:", indication_text)
+
+            # start and end of drugs
+            start_date_drug = ""
+            end_date_drug = ""
+            pattern = re.compile(
+                r'\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}\b'
+            )
+            match = re.search(pattern, indication_text)
+            if match:
+                matched_date = match.group()
+                start_date_drug = matched_date
+            match_end = re.search(pattern, indication_text)
+            if match_end:
+                matched_end_date = match_end.group()
+                if matched_end_date != start_date:
+                    end_date_drug = matched_end_date
+
+            # Reaction after drug
+            llt_reactions = []
+
+            new_lines_for_reaction_text = ""
+
+            for line in past_drug_reaction_text.split('.'):
+                contains_negative_keyword = any(negative in line.lower() for negative in negative_line_keywords)
+
+                if not contains_negative_keyword:
+                    # Check for articles and exclude lines that contain them
+                    doc = nlp(line)
+
+                    # Filter out common words
+                    filtered_tokens = [token.text for token in doc if token.text.lower() not in articles]
+
+                    # Join the filtered tokens to form a new line
+                    new_line = ' '.join(filtered_tokens)
+
+                    new_lines_for_reaction_text += new_line + '\n'
+
+            print("new_line++++", new_lines_for_reaction_text)
+            doc = nlp_1(new_lines_for_reaction_text)
+
+            for ent in doc.ents:
+                if ent.type == "PROBLEM":
+                    llt_reactions.append(ent.text)
+                if "COVID" in cleaned_comments and "19" in cleaned_comments:
+                    print("YES")
+                    llt_reactions.append("COVID-19")
+            llt_reactions_set = list(set(llt_reactions))
+
+            new_mother_llt_reactors = []
+
+            for llt in llt_reactions_set:
+                result = df.loc[df['LLT_NAME'].str.lower().str.contains(llt.lower()), 'LLT_NAME'].values
+                # result = df.loc[
+                #     df['LLT_NAME'].str.lower().str.extract(f'({llt.lower()})',
+                #                                            expand=False).notnull(), 'LLT_NAME'].values
+                if len(result) > 0:
+                    new_mother_llt_reactors.append(llt)
+            mother_llt_string = ','.join(new_mother_llt_reactors)
+
+            llt_reactions_string = ', '.join(new_mother_llt_reactors)
+            comment_reactions = past_drug_reaction_text
+
+            print("Every drug name", past_drug)
+            print("### comments are ###", past_drug_reaction_text)
+            print("Indication LLT:", llt_indicators)
+            print("Reaction LLT:", llt_reactions)
+            print("start date drug", start_date_drug)
+            print("end date drug", end_date_drug)
+
+            drug_information = {
+                "name_of_drug": past_drug,
+                "active_or_molecules": past_drug,
+                "start_date": start_date_drug,
+                "end_date": end_date_drug,
+                "llt_indication": llt_indicators_string,
+                "llt_indication_medracode": "",
+                "llt_indication_version": "",
+                "llt_reaction": llt_reactions_string,
+                "llt_reaction_medracode": "",
+                "llt_reaction_version": "",
+                "comments": comment_reactions,
+                "condition_type": "",
+                "verbatim": ""
+            }
+
+            all_parent_drug_information.append(drug_information)
     elif start_line is not None and mother_father_keyword == mother_father_keywords[1]:
         # Extracting starts
         nlp_1 = spacy.load("en_core_web_sm")
@@ -658,7 +897,7 @@ def get_parent_text(source_text, en_core, bcd5r):
 
         doc = nlp(cleaned_comments)
         for ent in doc.ents:
-            if ent.type == "PROBLEM":
+            if ent.label_ == "DISEASE":
                 mother_llt.append(ent.text)
         if "COVID" in cleaned_comments and "19" in cleaned_comments:
             print("YES")
@@ -859,21 +1098,61 @@ def get_parent_text(source_text, en_core, bcd5r):
 
         cleaned_comments = comments.replace(' -', '-')
 
+        negative_line_keywords = ["absent", "no", "not", "normal", "without", "not significant", "excluded"]
+
+        articles = ['a', 'an', 'the', 'these', 'those', 'were']
+
+        df = pd.read_csv("LLT_Details_26_1.csv")
+
+
+
+        new_lines_for_comments = ""
+        for line in comments.split('.'):
+            contains_negative_keyword = any(negative in line.lower() for negative in negative_line_keywords)
+
+            if not contains_negative_keyword:
+                # Check for articles and exclude lines that contain them
+                doc = nlp(line)
+
+                # Filter out common words
+                filtered_tokens = [token.text for token in doc if token.text.lower() not in articles]
+
+                # Join the filtered tokens to form a new line
+                new_line = ' '.join(filtered_tokens)
+
+                new_lines_for_comments += new_line + '\n'
+
+        print("new_line++++", new_lines_for_comments)
+        doc = nlp_1(new_lines_for_comments)
+
+        for ent in doc.ents:
+            if ent.type == "PROBLEM":
+                mother_llt.append(ent.text)
+            if "COVID" in cleaned_comments and "19" in cleaned_comments:
+                print("YES")
+                mother_llt.append("COVID-19")
+        mother_llt_set = list(set(mother_llt))
+
+        new_mother_llt_indicators = []
+
+        for llt in mother_llt_set:
+            result = df.loc[df['LLT_NAME'].str.lower().str.contains(llt.lower()), 'LLT_NAME'].values
+            # result = df.loc[
+            #     df['LLT_NAME'].str.lower().str.extract(f'({llt.lower()})', expand=False).notnull(), 'LLT_NAME'].values
+            if len(result) > 0:
+                new_mother_llt_indicators.append(llt)
+        mother_llt_string = ','.join(new_mother_llt_indicators)
+
+
+
         # bc5cdr_model_path = "stanza_resources\en\ner\bc5cdr.pt"
         # nlp = stanza.Pipeline('en', processors={'ner': bc5cdr_model_path})
 
         # nlp = stanza.Pipeline('en', package='CRAFT', processors={'ner': 'bc5cdr'}, download_method=None,use_gpu=False)
         # model_folder_path = "C:\Users\chebramu\PycharmProjects\pythonProject1\en_ner_bc5cdr_md-0.5.3"
-        nlp = spacy.load("en_ner_bc5cdr_md")
-        doc = nlp(comments)
-        for ent in doc.ents:
-            if ent.type == "PROBLEM":
-                mother_llt.append(ent.text)
-        if "COVID" in cleaned_comments and "19" in cleaned_comments:
-            print("YES")
-            mother_llt.append("COVID-19")
-        mother_llt_string = ','.join(mother_llt)
-        print("LLT", mother_llt_string)
+        # nlp = spacy.load("en_ner_bc5cdr_md")
+
+
         splitted_mother_llt = mother_llt_string.split(',')
         mother_llt_output = splitted_mother_llt[0]
         print("Comments", cleaned_comments)
@@ -974,7 +1253,7 @@ def get_parent_text(source_text, en_core, bcd5r):
         doc = nlp(text_before_medicine)
         drug_name_set = set()
         for ent in doc.ents:
-            if ent.type == "TREATMENT":
+            if ent.label_ == "CHEMICAL":
                 drug_name_set.add(ent.text)
         if "COVID" in cleaned_comments and "19" in cleaned_comments:
             print("YES")
@@ -983,7 +1262,7 @@ def get_parent_text(source_text, en_core, bcd5r):
         drug_name_string = ','.join(drug_name_list)
         print("LLT", drug_name_string)
 
-        past_drug_indication_text =""
+        past_drug_indication_text = ""
         past_drug_reaction_text = ""
         # iterating through drug names
         for i, past_drug in enumerate(drug_name_list):
@@ -1016,12 +1295,47 @@ def get_parent_text(source_text, en_core, bcd5r):
             # indication_text += text_for_indication + "\n"
             llt_indicators = []
             # nlp = stanza.Pipeline('en', package='CRAFT', processors={'ner': 'bc5cdr'}, download_method=None, use_gpu=False)
-            doc = nlp(indication_text)
+            new_lines_for_indication_text = ""
+
+            for line in indication_text.split('.'):
+                contains_negative_keyword = any(negative in line.lower() for negative in negative_line_keywords)
+
+                if not contains_negative_keyword:
+                    # Check for articles and exclude lines that contain them
+                    doc = nlp(line)
+
+                    # Filter out common words
+                    filtered_tokens = [token.text for token in doc if token.text.lower() not in articles]
+
+                    # Join the filtered tokens to form a new line
+                    new_line = ' '.join(filtered_tokens)
+
+                    new_lines_for_indication_text += new_line + '\n'
+
+            print("new_line++++", new_lines_for_indication_text)
+            doc = nlp_1(new_lines_for_indication_text)
+
             for ent in doc.ents:
                 if ent.type == "PROBLEM":
-                    llt_indicators.append(ent.text)
-            llt_indicator_set = list(set(llt_indicators))
-            llt_indicators_string = ','.join(llt_indicator_set)
+                    mother_llt.append(ent.text)
+                if "COVID" in cleaned_comments and "19" in cleaned_comments:
+                    print("YES")
+                    mother_llt.append("COVID-19")
+            mother_llt_set = list(set(mother_llt))
+
+            new_mother_llt_indicators = []
+
+            for llt in mother_llt_set:
+                result = df.loc[df['LLT_NAME'].str.lower().str.contains(llt.lower()), 'LLT_NAME'].values
+                # result = df.loc[
+                #     df['LLT_NAME'].str.lower().str.extract(f'({llt.lower()})',
+                #                                            expand=False).notnull(), 'LLT_NAME'].values
+                if len(result) > 0:
+                    new_mother_llt_indicators.append(llt)
+            mother_llt_string = ','.join(new_mother_llt_indicators)
+            llt_indicators_string = ','.join(llt_indicators)
+            print("Indication LLT:", llt_indicators)
+            print("Indication Comment:", indication_text)
 
 
             # start and end of drugs
@@ -1042,13 +1356,48 @@ def get_parent_text(source_text, en_core, bcd5r):
 
             # Reaction after drug
             llt_reactions = []
-            doc = nlp(past_drug_reaction_text)
+
+            new_lines_for_reaction_text = ""
+
+            for line in past_drug_reaction_text.split('.'):
+                contains_negative_keyword = any(negative in line.lower() for negative in negative_line_keywords)
+
+                if not contains_negative_keyword:
+                    # Check for articles and exclude lines that contain them
+                    doc = nlp(line)
+
+                    # Filter out common words
+                    filtered_tokens = [token.text for token in doc if token.text.lower() not in articles]
+
+                    # Join the filtered tokens to form a new line
+                    new_line = ' '.join(filtered_tokens)
+
+                    new_lines_for_reaction_text += new_line + '\n'
+
+            print("new_line++++", new_lines_for_reaction_text)
+            doc = nlp_1(new_lines_for_reaction_text)
+
             for ent in doc.ents:
                 if ent.type == "PROBLEM":
                     llt_reactions.append(ent.text)
-
+                if "COVID" in cleaned_comments and "19" in cleaned_comments:
+                    print("YES")
+                    llt_reactions.append("COVID-19")
             llt_reactions_set = list(set(llt_reactions))
-            llt_reactions_string = ', '.join(llt_reactions_set)
+
+            new_mother_llt_reactors = []
+
+            for llt in llt_reactions_set:
+                result= df.loc[df['LLT_NAME'].str.lower().str.contains(llt.lower()), 'LLT_NAME'].values
+                # result = df.loc[
+                #     df['LLT_NAME'].str.lower().str.extract(f'({llt.lower()})',
+                #                                            expand=False).notnull(), 'LLT_NAME'].values
+                if len(result) > 0:
+                    new_mother_llt_reactors.append(llt)
+            mother_llt_string = ','.join(new_mother_llt_reactors)
+
+
+            llt_reactions_string = ', '.join(new_mother_llt_reactors)
             comment_reactions = past_drug_reaction_text
 
             print("Every drug name", past_drug)
@@ -1063,10 +1412,10 @@ def get_parent_text(source_text, en_core, bcd5r):
                 "active_or_molecules": past_drug,
                 "start_date": start_date_drug,
                 "end_date": end_date_drug,
-                "llt_indication": llt_indicators,
+                "llt_indication": llt_indicators_string,
                 "llt_indication_medracode": "",
                 "llt_indication_version": "",
-                "llt_reaction": llt_reactions,
+                "llt_reaction": llt_reactions_string,
                 "llt_reaction_medracode": "",
                 "llt_reaction_version": "",
                 "comments": comment_reactions,
@@ -1094,7 +1443,7 @@ def get_parent_text(source_text, en_core, bcd5r):
 
         doc = nlp(indication_text)
         for ent in doc.ents:
-            if ent.type == "PROBLEM":
+            if ent.label_ == "DISEASE":
                 llt_indicators.append(ent.text)
         llt_indicators_string = ','.join(llt_indicators)
         print("Indication LLT:", llt_indicators)
@@ -1104,7 +1453,7 @@ def get_parent_text(source_text, en_core, bcd5r):
 
         doc = nlp(text_after_medicine)
         for ent in doc.ents:
-            if ent.type == "PROBLEM":
+            if ent.label_ == "DISEASE":
                 llt_reactions.append(ent.text)
         llt_reactions_string = ','.join(llt_reactions)
         print("Reaction LLT:", llt_reactions)

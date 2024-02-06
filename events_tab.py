@@ -4,10 +4,10 @@ import pandas as pd
 import re
 import json
 import os
+import stanza
 
 
-
-# reader = PdfReader('Uchio N..pdf')
+# reader = PdfReader("Bamahmud A.pdf")
 # source_file_num_pages = len(reader.pages)
 #
 # all_text = ""
@@ -19,6 +19,7 @@ import os
 #     all_text += text
 #
 # print(all_text)
+# nlp_1 = stanza.Pipeline('en', package='mimic', processors={'ner': 'i2b2'})
 def get_events_tab(source_text, country, bcd5r):
     all_text = source_text
     #nlp_1 = spacy.load('custom_ner_model_with_disease')
@@ -27,7 +28,7 @@ def get_events_tab(source_text, country, bcd5r):
     test = """she developed mental shocks, seizures, anemia, Myalgia and also fever. there is rise in immunoglobulin"""
     doc = nlp_1(test)
     for ent in doc.ents:
-        if ent.type == "PROBLEM":
+        if ent.type == "DISEASE":
             print(ent.text)
 
     report_to_discussion = ""
@@ -249,14 +250,14 @@ def get_events_tab(source_text, country, bcd5r):
     history_llt = []
     doc = nlp_1(text_before_medicine)
     for ent in doc.ents:
-        if ent.type== 'PROBLEM' and len(ent.text)>3:
+        if ent.type == 'PROBLEM' and len(ent.text) > 3:
             history_llt.append(ent.text)
     print("Events from medical history:", history_llt)
 
     doc = nlp_1(text_after_medicine)
     drugs_after_our_drug = []
     for ent in doc.ents:
-        if ent.type == "PROBLEM" and ent.text != 'BA':
+        if ent.type == "TREATMENT" and ent.text != 'BA':
             drugs_after_our_drug.append(ent.text)
 
     print("drugs after our medicine:", drugs_after_our_drug)
@@ -268,16 +269,25 @@ def get_events_tab(source_text, country, bcd5r):
 
     doc = nlp_1(text_after_medicine)
     for ent in doc.ents:
-        if ent.type == "PROBLEM" and ' no ' not in ent.text.lower()  and len(ent.text)>3:
+        if ent.type == "PROBLEM" and ' no ' not in ent.text.lower() and len(ent.text)>3:
             llt.append(ent.text)
+    df = pd.read_csv("LLT_Details_26_1.csv")
+
     #print("llt:", llt)
     text_split = text_after_medicine.split('.')
     for line in text_split:
         for ent in llt:
             if ent in line and not re.search(r'\bno\b', line):
                 events_llt_repeated.append(ent)
-
-
+    events_llt_for_medra=[]
+    set_events=list(set(events_llt_repeated))
+    for i in set_events:
+        print(i)
+        result = df.loc[df['LLT_NAME'].str.lower().str.contains(i.lower()), 'LLT_NAME'].values
+        if len(result) > 0:
+            events_llt_for_medra.append(i)
+            print(i)
+    print("events llt for medra", events_llt_for_medra)
     # using customed and trained from our side
     # doc = nlp_2(text_after_medicine)
     # for ent in doc.ents:
@@ -290,7 +300,7 @@ def get_events_tab(source_text, country, bcd5r):
     #         if ent in line and not re.search(r'\bno\b', line):
     #             events_llt_repeated.append(ent)
     #
-    events_llt_raw = list(set(events_llt_repeated))
+    events_llt_raw = events_llt_for_medra
     print("events_llt", events_llt_raw)
 
     resolved_keywords = ['stabilized', 'recovered', 'normalized', 'resolved', 'improved', 'disappeared', 'absense', 'heal', 'regulated', 'cleared', 'absen', 'reduction', 'reduced', 'responded well']
@@ -625,7 +635,7 @@ def get_events_tab(source_text, country, bcd5r):
                 not_resolved_matching_llt = []
                 doc_not_resolved = nlp_1(''.join(matching_words_for_not_resolved))
                 for ent in doc_not_resolved.ents:
-                    if ent.PROBLEM == "PROBLEM":
+                    if ent.type == "PROBLEM":
                         not_resolved_matching_llt.append(ent.text)
 
                 if matching_words_for_not_resolved or any(word in not_resolved_matching_llt for word in matching_words_for_not_resolved):
@@ -1207,5 +1217,5 @@ def get_events_tab(source_text, country, bcd5r):
     print("5th tab output is", json.dumps(reaction_event))
     return reaction_event
 
-# events=get_events_tab(source_text=all_text, country="england")
+# events=get_events_tab(source_text=all_text, country="england", bcd5r=nlp_1)
 

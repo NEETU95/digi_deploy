@@ -2,7 +2,7 @@ import re
 import pandas as pd
 import pycountry
 import json
-from fastapi import HTTPException
+
 from metapub import PubMedFetcher,config
 def get_receipt(en_core, weekly_text_1):
     weekly_text = weekly_text_1

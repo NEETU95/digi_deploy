@@ -6,6 +6,8 @@ import pycountry
 import json
 import pandas as pd
 import fitz
+import stanza
+from stanza.pipeline.core import DownloadMethod
 
 
 #from parent import mother_llt, all_text, nlp, nlp_1
@@ -20,7 +22,7 @@ import fitz
 # weekly_text = ""
 # all_text = ""
 # nlp = spacy.load("en_core_web_sm")
-# nlp_1 = spacy.load("en_ner_bc5cdr_md")
+# nlp_1 = stanza.Pipeline('en', package='mimic', processors={'ner': 'i2b2'}, download_method=DownloadMethod.REUSE_RESOURCES)
 # first_page = source_file_reader.pages[0]
 # first_page_text = first_page.extract_text()
 # # Loop through all pages and extract text
@@ -37,8 +39,8 @@ import fitz
 #print(all_text)
 def get_patient_text(source_text, en_core, bcd5r):
     all_text = source_text
-    nlp_1 = en_core
-    nlp = bcd5r
+    nlp_1 = bcd5r
+    nlp = en_core
 
     report_to_discussion = ""
     first_three_lines = ""
@@ -55,7 +57,7 @@ def get_patient_text(source_text, en_core, bcd5r):
     protect_confidentiality = "Yes"
     found_start_line_second = ""
     abstract_to_end_first = ""
-    doc = nlp_1(all_text)
+    doc = nlp(all_text)
     for keyword in case_keywords:
         if keyword in all_text:
             # print("keyword is presnet")
@@ -249,7 +251,7 @@ def get_patient_text(source_text, en_core, bcd5r):
 
     # print("first three#########", first_three_lines)
 
-    doc = nlp_1(first_three_lines)
+    doc = nlp(first_three_lines)
 
     # First Name
     title = ""
@@ -633,7 +635,7 @@ def get_patient_text(source_text, en_core, bcd5r):
                         found_patient_countries = country.name
                         country_found = True
                         break  # Stop searching for country names in this affiliation
-                country_doc = nlp_1(affiliation)
+                country_doc = nlp(affiliation)
                 for token in country_doc:
                     if token.ent_type_ == "GPE" and token.text:
                         city = token.text
@@ -848,7 +850,7 @@ def get_patient_text(source_text, en_core, bcd5r):
     # Cause of death
     cause_of_death = []
     death_llt = []
-    doc = nlp(death_text)
+    doc = nlp_1(death_text)
     # for ent in doc.ents:
     #     if ent.label_ == "DISEASE" and ent.text not in dead_keywords:
     #         cause_of_death.append(ent.text)
@@ -892,7 +894,7 @@ def get_patient_text(source_text, en_core, bcd5r):
     print("Autopsy:", autopsy)
     autopsy_cause_of_death = []
     autopsy_llt = []
-    doc = nlp(autopsy_text)
+    doc = nlp_1(autopsy_text)
     # for ent in doc.ents:
     #     if ent.label_ == "DISEASE" and ent.text not in dead_keywords:
     #         autopsy_cause_of_death.append(ent.text)
@@ -919,20 +921,61 @@ def get_patient_text(source_text, en_core, bcd5r):
 
     # medical llt
 
-    llt_medical = []
-    print("text befor med is#####", text_before_medicine)
+    llt_medical_1 = []
+    new_lines_for_text_before_medicine=""
+    period_before_negative_line = ""
+    period_after_negative_line= ""
+    print("text before med is#####", text_before_medicine)
     # nlp = stanza.Pipeline('en', package='CRAFT', processors={'ner': 'bc5cdr'}, download_method=None, use_gpu=False)
-    doc = nlp(text_before_medicine)
+
+
+    negative_line_keywords = ["absent", "no", "not", "normal", "without", "not significant", "excluded"]
+
+    articles = ['a', 'an', 'the', 'these', 'those', 'were']
+    period_before_negative_line = ""
+    new_lines_for_text_before_medicine = ""
+    for line in text_before_medicine.split('.'):
+        contains_negative_keyword = any(negative in line.lower() for negative in negative_line_keywords)
+
+        if not contains_negative_keyword:
+            # Check for articles and exclude lines that contain them
+            doc = nlp(line)
+
+            # Filter out common words
+            filtered_tokens = [token.text for token in doc if token.text.lower() not in articles]
+
+            # Join the filtered tokens to form a new line
+            new_line = ' '.join(filtered_tokens)
+
+            new_lines_for_text_before_medicine += new_line + '\n'
+
+    print("new_line++++", new_lines_for_text_before_medicine)
+    # Process the text using spaCy
+    doc_1 = nlp_1(new_lines_for_text_before_medicine)
+
     # for ent in doc.ents:
     #     if ent.label_ == "DISEASE" and len(ent.text) > 3:
     #         llt_medical.append(ent.text)
-    for ent in doc.entities:
+    for ent in doc_1.entities:
         if ent.type == "PROBLEM" and len(ent.text) > 3:
-            llt_medical.append(ent.text)
-    print("Indication LLT:", llt_medical)
+            llt_medical_1.append(ent.text)
+    print("Indication LLT:", llt_medical_1)
     print("Indication Comment:", text_before_medicine)
 
-    filtered_llt = list(set(llt_medical))
+    filtered_llt = list(set(llt_medical_1))
+    llt_medical=[]
+    #
+    #changed here to new code, validation is left############################
+
+    df = pd.read_csv("LLT_Details_26_1.csv")
+    print(df.columns)
+    for llt in filtered_llt:
+        print(llt)
+        result = df.loc[df['LLT_NAME'].str.lower().str.contains(llt.lower()), 'LLT_NAME'].values
+
+        if len(result) > 0:
+            llt_medical.append(llt)
+            print(llt)
 
     llt_medical_string = ', '.join(filtered_llt)
 
@@ -1016,8 +1059,9 @@ def get_patient_text(source_text, en_core, bcd5r):
     #        drugs.add(ent.text)
     # print("drugs set  is", drugs)
     # Access entities in the processed document
-    doc=nlp(text_before_medicine)
-    for ent in doc.ents:
+    doc_1=nlp_1(text_before_medicine)
+    print("entered for drugs//////")
+    for ent in doc_1.ents:
         if ent.type == "TREATMENT" and ent.text != "RVD" and ent.text != drug_found and ent.text != "DOI" and len(ent.text)>3:
             drugs.add(ent.text)
             print("drugs are:", ent.text)
@@ -1074,19 +1118,43 @@ def get_patient_text(source_text, en_core, bcd5r):
         # indication_text += text_for_indication + "\n"
         llt_indicators = []
         # nlp = stanza.Pipeline('en', package='CRAFT', processors={'ner': 'bc5cdr'}, download_method=None, use_gpu=False)
-        doc = nlp(indication_text)
+
+        period_before_negative_line = ""
+        new_lines_for_indication_text = ""
+        for line in indication_text.split('.'):
+            contains_negative_keyword = any(negative in line.lower() for negative in negative_line_keywords)
+
+            if not contains_negative_keyword:
+                # Check for articles and exclude lines that contain them
+                doc = nlp(line)
+
+                # Filter out common words
+                filtered_tokens = [token.text for token in doc if token.text.lower() not in articles]
+
+                # Join the filtered tokens to form a new line
+                new_line = ' '.join(filtered_tokens)
+
+                new_lines_for_indication_text += new_line + '\n'
+
+        print("new_line++++", new_lines_for_indication_text)
+        doc = nlp_1(new_lines_for_indication_text)
+
         for ent in doc.ents:
             if ent.type == "PROBLEM":
                 llt_indicators.append(ent.text)
         llt_indicator_set = list(set(llt_indicators))
-        llt_indicators_string = ','.join(llt_indicator_set)
 
 
-        if llt_indicators:
-            llt_1 = [item for item in llt_medical if item not in llt_indicators]
-            llt = ','.join(llt_1)
-        else:
-            llt = filtered_llt
+        new_llt_indicators=[]
+        for llt in llt_indicator_set:
+            result = df.loc[df['LLT_NAME'].str.lower().str.contains(llt.lower()), 'LLT_NAME'].values
+            #result = df.loc[df['LLT_NAME'].str.lower().str.extract(f'({llt.lower()})', expand=False).notnull(), 'LLT_NAME'].values.flatten()
+            if len(result) > 0:
+                new_llt_indicators.append(llt)
+
+        llt_indicators_string = ','.join(new_llt_indicators)
+
+
 
         # start and end of drugs
         start_date_drug = ""
@@ -1106,13 +1174,37 @@ def get_patient_text(source_text, en_core, bcd5r):
 
         # Reaction after drug
         llt_reactions = []
-        doc = nlp(past_drug_reaction_text)
+        new_llt_reactions = []
+        new_lines_for_reaction_text=""
+        for line in past_drug_reaction_text.split('.'):
+            contains_negative_keyword = any(negative in line.lower() for negative in negative_line_keywords)
+
+            if not contains_negative_keyword:
+                # Check for articles and exclude lines that contain them
+                doc = nlp(line)
+
+                # Filter out common words
+                filtered_tokens = [token.text for token in doc if token.text.lower() not in articles]
+
+                # Join the filtered tokens to form a new line
+                new_line = ' '.join(filtered_tokens)
+
+                new_lines_for_reaction_text += new_line + '\n'
+
+        doc = nlp_1(new_lines_for_reaction_text)
         for ent in doc.ents:
             if ent.type == "PROBLEM":
                 llt_reactions.append(ent.text)
-
         llt_reactions_set = list(set(llt_reactions))
-        llt_reactions_string = ', '.join(llt_reactions_set)
+        for llt in llt_reactions_set:
+            result = df.loc[df['LLT_NAME'].str.lower().str.contains(llt.lower()), 'LLT_NAME'].values
+            # result = df.loc[
+            #     df['LLT_NAME'].str.lower().str.extract(f'({llt.lower()})', expand=False).notnull(), 'LLT_NAME'].values
+            if len(result) > 0:
+                new_llt_reactions.append(llt)
+
+        llt_reactions_string = ', '.join(new_llt_reactions)
+
         comment_reactions = past_drug_reaction_text
 
 
